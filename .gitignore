@@ -3,4 +3,5 @@
 *.pdb
 .vs
 .vscode
-.exe
+*.exe
+*.exp
