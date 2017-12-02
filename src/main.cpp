@@ -13,68 +13,7 @@
 
 #include <glm/glm.hpp>
 
-/*********************************************************************
- TYPES
- *********************************************************************/
-
-struct Window {
-    SDL_Window *sdl_window;
-    SDL_GLContext context;
-
-    std::string window_title;
-    int width;
-    int height;
-};
-
-struct Shader {
-    int id;
-    GLuint glid;
-
-    std::string vertex_shader_filename;
-    std::string fragment_shader_filename;
-    std::string name;
-
-    bool bound;
-};
-
-struct Texture {
-    int id;
-    GLuint glid;
-};
-
-struct Frame {
-    int id;
-    GLuint glid;
-
-    GLuint gl_texture_id;
-    GLuint gl_depth_buffer_id;
-};
-
-
-struct Sprite {
-    int id;
-};
-
-struct Scene;
-struct Entity {
-    int id;
-    Scene *scene;
-    
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale; 
-
-    std::list<Entity *> children;
-};
-
-struct Scene {
-    int id;
-
-    GLuint vao;
-    Frame frame;
-
-    std::list <Entity *> entities;
-};
+#include "types.h"
 
 /*********************************************************************
  GLOBALS
@@ -86,7 +25,7 @@ static std::map<std::string, Shader *> SHADERS;
 static int SCREEN_WIDTH = 1200;
 static int SCREEN_HEIGHT = 800;
 
-static std::list<Scene *> SCENES;
+static std::list<Scene *> SCENE_STACK;
 
 /*********************************************************************
  FUNCTION DEFINITIONS
@@ -98,8 +37,12 @@ void push_scene(Scene *scene);
 void use_scene(Scene *scene);
 Scene *pop_scene();
 void init_frame(Frame *frame);
+void use_frame(Frame *frame);
 void init_texture(Texture *texture);
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename);
+void set_shader_uniform_1i(Shader *shader, std::string uniform_name, int value);
+void set_shader_uniform_1f(Shader *shader, std::string uniform_name, float value);
+GLint get_shader_uniform_location(Shader *shader, std::string uniform_name);
 void use_shader(Shader *shader);
 void create_window(Window *win, std::string &title, int width, int height);
 
@@ -127,7 +70,10 @@ int main(int argc, char * argv[])
     init_shader(default_shader, "default_shader", "media\\shaders\\simple.vs.glsl", "media\\shaders\\simple.fs.glsl");
     init_shader(frame_shader, "frame_shader", "media\\shaders\\frame.vs.glsl", "media\\shaders\\frame.fs.glsl");
 
-    use_shader(default_shader);
+    //TODO(Brett): add memory manager...
+    Scene *scene = (Scene*)malloc(sizeof(Scene));
+    init_scene(scene, "main_scene");
+
 
     bool running = true;
     SDL_Event event;
@@ -142,7 +88,24 @@ int main(int argc, char * argv[])
             }
         }
 
-        glClearColor(1.f, 1.f, 1.f, 1.f);
+        use_shader(default_shader);
+        use_frame(&scene->frame);
+
+        glClearColor(1.f, 0.f, 1.f, 1.f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        use_frame(nullptr);
+
+        use_shader(frame_shader);
+        set_shader_uniform_1i(frame_shader, "frame_texture", 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, scene->frame.gl_texture_id);
+
+
+        glClearColor(0.f, 1.f, 0.f, 0.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -171,10 +134,7 @@ std::string read_file(std::string filename)
 
     char *med = (char*)malloc(sizeof(char)*size);
     file.read(med, size);
-
     std::string result = med + '\0';
-    std::cout << result << std::endl;
-
     return result;
 }
 
@@ -194,6 +154,7 @@ void init_scene(Scene *scene, std::string name)
     glBindVertexArray(scene->vao);
     init_frame(&scene->frame);
 }
+
 
 void init_frame(Frame *frame)
 {
@@ -231,7 +192,24 @@ void init_frame(Frame *frame)
         std::cout << "Error creating framebuffer" << std::endl;
         exit(1);
     }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+
+void use_frame(Frame *frame)
+{
+    GLuint id = 0;
+    if (frame == nullptr){
+        id = 0;
+    }
+    else {
+        id = frame->glid;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, id);
+}
+
 
 void push_scene(Scene *scene)
 {
@@ -240,8 +218,9 @@ void push_scene(Scene *scene)
         exit(1);
     }
 
-    SCENES.push_back(scene);
+    SCENE_STACK.push_back(scene);
 }
+
 
 void use_scene(Scene *scene)
 {
@@ -250,17 +229,19 @@ void use_scene(Scene *scene)
         exit(1);
     }
 
-    // Scene *scene = SCENES.back();
-    SCENES.pop_back();
-    SCENES.push_back(scene);
+    // Scene *scene = SCENE_STACK.back();
+    SCENE_STACK.pop_back();
+    SCENE_STACK.push_back(scene);
 }
+
 
 Scene *pop_scene()
 {
-    Scene *scene = SCENES.back();
-    SCENES.pop_back();
+    Scene *scene = SCENE_STACK.back();
+    SCENE_STACK.pop_back();
     return scene;
 }
+
 
 void init_texture(Texture *texture)
 {
@@ -275,6 +256,7 @@ void init_texture(Texture *texture)
 
     texture->id = ++texture_ids;
 }
+
 
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename)
 {
@@ -292,6 +274,7 @@ void init_shader(Shader *shader, std::string name, std::string vertex_filename, 
     shader->fragment_shader_filename = fragment_filename;
     shader->name = name;
     shader->bound = false;
+    shader->uniform_locations = new std::map<std::string, GLint>();
 
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -362,6 +345,59 @@ void init_shader(Shader *shader, std::string name, std::string vertex_filename, 
     SHADERS[name] = shader;
 }
 
+
+GLint get_shader_uniform_location(Shader *shader, std::string uniform_name) 
+{
+    if (shader == nullptr) {
+        std::cout << "Attempt to read nullptr instead of shader" << std::endl;
+        exit(1);
+    }
+
+    if (shader->uniform_locations->find(uniform_name) == shader->uniform_locations->end()) {
+        GLint location = glGetUniformLocation(shader->glid, uniform_name.c_str());
+
+        if ( location < 0 ) {
+            std::cout << "Uniform location " << uniform_name << " not found!" << std::endl;
+            exit(1);
+        }
+        
+        (*shader->uniform_locations)[uniform_name] = location;
+        return (*shader->uniform_locations)[uniform_name];
+    }
+    else {
+        return (*shader->uniform_locations)[uniform_name];
+    }
+
+    //NOTE(Brett): SHould never be here
+    return -1;
+}
+
+
+void set_shader_uniform_1i(Shader *shader, std::string uniform_name, int value) 
+{
+    if ( shader == nullptr ) {
+        std::cout << "Attempt to read nullptr instead of shader" << std::endl;
+        exit(1);
+    }
+
+    GLint location = get_shader_uniform_location(shader, uniform_name);
+    glUniform1i(location, value);
+}
+
+
+void set_shader_uniform_1f(Shader *shader, std::string uniform_name, float value) 
+{
+    if ( shader == nullptr ) {
+        std::cout << "Attempt to read nullptr instead of shader" << std::endl;
+        exit(1);
+    }
+
+    GLint location = get_shader_uniform_location(shader, uniform_name);
+    glUniform1f(location, value);
+}
+
+
+
 void use_shader(Shader *shader) 
 {
     if (shader == nullptr) {
@@ -376,6 +412,7 @@ void use_shader(Shader *shader)
         glUseProgram(bound_shader_id);
     }
 }
+
 
 void create_window(Window *win, std::string &title, int width, int height) 
 {

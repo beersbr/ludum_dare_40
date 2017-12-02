@@ -1,9 +1,7 @@
 #version 330
 
 uniform sampler2D frame_texture;
-
 in vec2 vs_uv;
-
 out vec4 color;
 
 void main() {
