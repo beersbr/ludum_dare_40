@@ -45,6 +45,9 @@ struct Texture {
 struct Frame {
     int id;
     GLuint glid;
+
+    GLuint gl_texture_id;
+    GLuint gl_depth_buffer_id;
 };
 
 
@@ -198,27 +201,28 @@ void init_frame(Frame *frame)
     glGenFramebuffers(1, &frame->glid);
     glBindFramebuffer(GL_FRAMEBUFFER, frame->glid);
 
-    // glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glGenTextures(1, &frame->gl_texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture->gl_texture_id);
 
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0,GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-    // GLuint depthrenderbuffer;
-    // glGenRenderbuffers(1, &depthrenderbuffer);
-    // glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
-    // glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 1024, 768);
-    // glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    // glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderedTexture, 0);
+    frame->gl_depth_buffer_id;
+    glGenRenderbuffers(1, &texture->gl_depth_buffer_id);
+    glBindRenderbuffer(GL_RENDERBUFFER, texture->gl_depth_buffer_id);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, texture->gl_depth_buffer_id);
 
-    // GLenum DrawBuffers[1] = {GL_COLOR_ATTACHMENT0};
-    // glDrawBuffers(1, DrawBuffers);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_texture_id, 0);
+    GLenum draw_buffers[1] = {GL_COLOR_ATTACHMENT0};
+    glDrawBuffers(1, draw_buffers);
 
-    // if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    //     std::cout << "Could not create framebuffer" << std::endl;
-    //     exit(1);
-    // }
-
+    if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cout << "Error creating framebuffer" << std::endl;
+        exit(1);
+    }
 }
 
 void init_texture(Texture *texture)
@@ -233,9 +237,6 @@ void init_texture(Texture *texture)
     memset(texture, 0, sizeof(Texture));
 
     texture->id = ++texture_ids;
-
-    glGenTextures(1, &texture->glid);
-    glBindTexture(GL_TEXTURE_2D, texture->glid);
 }
 
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename)
