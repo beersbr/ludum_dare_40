@@ -9,6 +9,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_Image.h>
 
 #include <glm/glm.hpp>
 
@@ -79,11 +80,17 @@ struct Scene {
 static Window *window = nullptr;
 static std::map<std::string, Shader *> SHADERS;
 
+static int SCREEN_WIDTH = 1200;
+static int SCREEN_HEIGHT = 800;
+
 /*********************************************************************
  FUNCTION DEFINITIONS
  *********************************************************************/
 
 std::string read_file(std::string filename);
+void init_scene(Scene *scene, std::string name);
+void init_frame(Frame *frame);
+void init_texture(Texture *texture);
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename);
 void use_shader(Shader *shader);
 void create_window(Window *win, std::string &title, int width, int height);
@@ -97,7 +104,7 @@ int main(int argc, char * argv[])
 
     window = (Window*)malloc(sizeof(Window));
     std::string window_title = "ludum dare 40";
-    create_window(window, window_title, 1200, 800);
+    create_window(window, window_title, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     Shader *shader = (Shader*)malloc(sizeof(Shader));
 
@@ -160,6 +167,76 @@ std::string read_file(std::string filename)
     return result;
 }
 
+
+void init_scene(Scene *scene, std::string name)
+{
+    if (scene == nullptr) {
+        std::cout << "scene is null" << std::endl;
+        exit(1);
+    }
+
+    static int scene_ids = 0;
+
+    memset(scene, 0, sizeof(Scene));
+    scene->id = ++scene_ids;
+    glGenVertexArrays(1, &scene->vao);
+    glBindVertexArray(scene->vao);
+    init_frame(&scene->frame);
+}
+
+void init_frame(Frame *frame)
+{
+    if (frame == nullptr) {
+        std::cout << "frame is null" << std::endl;
+        exit(1);
+    }
+
+    static int frame_ids = 0;
+
+    memset(frame, 0, sizeof(Frame));
+    frame->id = ++frame_ids;
+    glGenFramebuffers(1, &frame->glid);
+    glBindFramebuffer(GL_FRAMEBUFFER, frame->glid);
+
+    // glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    // GLuint depthrenderbuffer;
+    // glGenRenderbuffers(1, &depthrenderbuffer);
+    // glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
+    // glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 1024, 768);
+    // glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
+
+    // glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderedTexture, 0);
+
+    // GLenum DrawBuffers[1] = {GL_COLOR_ATTACHMENT0};
+    // glDrawBuffers(1, DrawBuffers);
+
+    // if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+    //     std::cout << "Could not create framebuffer" << std::endl;
+    //     exit(1);
+    // }
+
+}
+
+void init_texture(Texture *texture)
+{
+    if (texture == nullptr) {
+        std::cout << "texture is null" << std::endl;
+        exit(1);
+    }
+
+    static int texture_ids = 0;
+
+    memset(texture, 0, sizeof(Texture));
+
+    texture->id = ++texture_ids;
+
+    glGenTextures(1, &texture->glid);
+    glBindTexture(GL_TEXTURE_2D, texture->glid);
+}
 
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename)
 {
