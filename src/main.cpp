@@ -86,12 +86,17 @@ static std::map<std::string, Shader *> SHADERS;
 static int SCREEN_WIDTH = 1200;
 static int SCREEN_HEIGHT = 800;
 
+static std::list<Scene *> SCENES;
+
 /*********************************************************************
  FUNCTION DEFINITIONS
  *********************************************************************/
 
 std::string read_file(std::string filename);
 void init_scene(Scene *scene, std::string name);
+void push_scene(Scene *scene);
+void use_scene(Scene *scene);
+Scene *pop_scene();
 void init_frame(Frame *frame);
 void init_texture(Texture *texture);
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename);
@@ -109,8 +114,6 @@ int main(int argc, char * argv[])
     std::string window_title = "ludum dare 40";
     create_window(window, window_title, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    Shader *shader = (Shader*)malloc(sizeof(Shader));
-
     GLuint vao = 0;
     glCreateVertexArrays(1, &vao);
 
@@ -118,8 +121,13 @@ int main(int argc, char * argv[])
 
     glBindVertexArray(vao);
 
-    init_shader(shader, "default_shader", "media\\shaders\\simple_shader.vs.glsl", "media\\shaders\\simple_shader.fs.glsl");
-    use_shader(shader);
+    Shader *default_shader = (Shader*)malloc(sizeof(Shader));
+    Shader *frame_shader = (Shader*)malloc(sizeof(Shader));
+
+    init_shader(default_shader, "default_shader", "media\\shaders\\simple.vs.glsl", "media\\shaders\\simple.fs.glsl");
+    init_shader(frame_shader, "frame_shader", "media\\shaders\\frame.vs.glsl", "media\\shaders\\frame.fs.glsl");
+
+    use_shader(default_shader);
 
     bool running = true;
     SDL_Event event;
@@ -164,7 +172,7 @@ std::string read_file(std::string filename)
     char *med = (char*)malloc(sizeof(char)*size);
     file.read(med, size);
 
-    std::string result = med;
+    std::string result = med + '\0';
     std::cout << result << std::endl;
 
     return result;
@@ -202,7 +210,7 @@ void init_frame(Frame *frame)
     glBindFramebuffer(GL_FRAMEBUFFER, frame->glid);
 
     glGenTextures(1, &frame->gl_texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture->gl_texture_id);
+    glBindTexture(GL_TEXTURE_2D, frame->gl_texture_id);
 
     glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA, SCREEN_WIDTH, SCREEN_HEIGHT, 0,GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
@@ -210,10 +218,10 @@ void init_frame(Frame *frame)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     frame->gl_depth_buffer_id;
-    glGenRenderbuffers(1, &texture->gl_depth_buffer_id);
-    glBindRenderbuffer(GL_RENDERBUFFER, texture->gl_depth_buffer_id);
+    glGenRenderbuffers(1, &frame->gl_depth_buffer_id);
+    glBindRenderbuffer(GL_RENDERBUFFER, frame->gl_depth_buffer_id);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCREEN_WIDTH, SCREEN_HEIGHT);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, texture->gl_depth_buffer_id);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, frame->gl_depth_buffer_id);
 
     glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, frame->gl_texture_id, 0);
     GLenum draw_buffers[1] = {GL_COLOR_ATTACHMENT0};
@@ -223,6 +231,35 @@ void init_frame(Frame *frame)
         std::cout << "Error creating framebuffer" << std::endl;
         exit(1);
     }
+}
+
+void push_scene(Scene *scene)
+{
+    if (scene==nullptr) {
+        std::cout << "Cannot push null scene" << std::endl;
+        exit(1);
+    }
+
+    SCENES.push_back(scene);
+}
+
+void use_scene(Scene *scene)
+{
+    if (scene==nullptr) {
+        std::cout << "Cannot set null scene" << std::endl;
+        exit(1);
+    }
+
+    // Scene *scene = SCENES.back();
+    SCENES.pop_back();
+    SCENES.push_back(scene);
+}
+
+Scene *pop_scene()
+{
+    Scene *scene = SCENES.back();
+    SCENES.pop_back();
+    return scene;
 }
 
 void init_texture(Texture *texture)
@@ -298,7 +335,6 @@ void init_shader(Shader *shader, std::string name, std::string vertex_filename, 
         std::cout << "FRAGMENT SHADER COMPILATION LOG\n\n" << infolog << std::endl;
         free(infolog);
     }
-
 
     shader->glid = glCreateProgram();
     glUseProgram(shader->glid);
