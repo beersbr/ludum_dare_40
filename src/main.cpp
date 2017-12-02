@@ -1,3 +1,4 @@
+#include <windows.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -12,6 +13,7 @@
 #include <SDL2/SDL_Image.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "types.h"
 
@@ -38,13 +40,21 @@ void use_scene(Scene *scene);
 Scene *pop_scene();
 void init_frame(Frame *frame);
 void use_frame(Frame *frame);
-void init_texture(Texture *texture);
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename);
 void set_shader_uniform_1i(Shader *shader, std::string uniform_name, int value);
 void set_shader_uniform_1f(Shader *shader, std::string uniform_name, float value);
+void set_shader_uniform_matrix4fv(Shader *shader, std::string uniform_name, int count, bool transpose, glm::mat4 *matrices);
+
 GLint get_shader_uniform_location(Shader *shader, std::string uniform_name);
 void use_shader(Shader *shader);
 void create_window(Window *win, std::string &title, int width, int height);
+
+void init_texture(Texture *texture, std::string name, std::string image_path);
+void init_entity(Entity *entity, Scene *scene, glm::vec3 position, glm::vec3 scale = glm::vec3(1.f, 1.f, 1.f), glm::vec3 rotation = glm::vec3(0.f, 0.f, 0.f));
+void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 offset = glm::vec2(0.f, 0.f), glm::vec2 frame_size = glm::vec2(0.f, 0.f));
+void add_entity(Entity *entity, Entity *parent);
+
+void draw_entity(Entity *entity);
 
 /*********************************************************************
  PROGRAM
@@ -52,32 +62,67 @@ void create_window(Window *win, std::string &title, int width, int height);
 int main(int argc, char * argv[])
 {
     SDL_Init(SDL_INIT_EVERYTHING);
+    IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF);
 
-    window = (Window*)malloc(sizeof(Window));
+    window = MALLOC(Window);
+
     std::string window_title = "ludum dare 40";
     create_window(window, window_title, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    GLuint vao = 0;
-    glCreateVertexArrays(1, &vao);
-
-    std::cout << "VAO: " << vao << std::endl;
-
-    glBindVertexArray(vao);
-
-    Shader *default_shader = (Shader*)malloc(sizeof(Shader));
-    Shader *frame_shader = (Shader*)malloc(sizeof(Shader));
-
-    init_shader(default_shader, "default_shader", "media\\shaders\\simple.vs.glsl", "media\\shaders\\simple.fs.glsl");
-    init_shader(frame_shader, "frame_shader", "media\\shaders\\frame.vs.glsl", "media\\shaders\\frame.fs.glsl");
-
     //TODO(Brett): add memory manager...
-    Scene *scene = (Scene*)malloc(sizeof(Scene));
+    Shader *default_shader = MALLOC(Shader);
+    Shader *frame_shader = MALLOC(Shader);
+    Shader *sprite_shader = MALLOC(Shader);
+
+    init_shader(default_shader, "default", "media\\shaders\\simple.vs.glsl", "media\\shaders\\simple.fs.glsl");
+    init_shader(frame_shader, "frame", "media\\shaders\\frame.vs.glsl", "media\\shaders\\frame.fs.glsl");
+    init_shader(sprite_shader, "sprite", "media\\shaders\\sprite.vs.glsl", "media\\shaders\\sprite.fs.glsl");
+
+    Texture *ship_texture = MALLOC(Texture);
+    init_texture(ship_texture, "blue_ship", "media\\images\\PNG\\playerShip2_blue.png");
+
+    Texture *option_texture = MALLOC(Texture);
+    init_texture(option_texture, "blue_option", "media\\images\\PNG\\ufoBlue.png");
+
+    Scene *scene = MALLOC(Scene);
     init_scene(scene, "main_scene");
 
 
+    Entity *player = MALLOC(Entity);
+    init_entity(player, scene,
+                glm::vec3(SCREEN_WIDTH/2.f, SCREEN_HEIGHT/2.f, 0.f),
+                glm::vec3(1.f, 1.f, 1.f),
+                glm::vec3(0.f, 0.f, 0.f));
+
+    player->sprite = MALLOC(Sprite);
+    init_sprite(player->sprite, player, ship_texture);
+    
+    glm::vec2 image_size = player->sprite->texture->image_size;
+    player->scale = glm::vec3(image_size.x, image_size.y, 0.f);
+    player->rotation = glm::vec3(180.f, 0.f, 0.f);
+
+    
+    Entity *option = MALLOC(Entity);
+    init_entity(option, nullptr,
+                glm::vec3(100.f, 0.f, -1.f),
+                glm::vec3(30.f, 30.f, 30.f),
+                glm::vec3(0.f, 0.f, 0.f));
+    
+    option->sprite = MALLOC(Sprite);
+    init_sprite(option->sprite, option, option_texture);
+
+    add_entity(option, player);
+
     bool running = true;
+
+    int start_time = SDL_GetTicks();
+    int current_time = start_time;
+
     SDL_Event event;
     while(running) {
+        int last_time = current_time;
+        current_time = SDL_GetTicks();
+
         while(SDL_PollEvent(&event)) {
             switch(event.type) {
                 case SDL_QUIT:
@@ -85,31 +130,38 @@ int main(int argc, char * argv[])
                     running = false;
                     break;
                 }
+                case SDL_KEYDOWN:
+                {
+                    switch(event.key.keysym.sym) {
+                        case SDLK_ESCAPE:
+                        {
+                            running = false;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
+        //NOTE(Brett): Draw scene
         use_shader(default_shader);
         use_frame(&scene->frame);
 
-        glClearColor(1.f, 0.f, 1.f, 1.f);
+        glClearColor(0.f, 0.f, 0.5f, 0.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        draw_entity(player);
+
+
 
         use_frame(nullptr);
-
         use_shader(frame_shader);
         set_shader_uniform_1i(frame_shader, "frame_texture", 0);
-
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, scene->frame.gl_texture_id);
-
-
-        glClearColor(0.f, 1.f, 0.f, 0.f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+        // glClearColor(1.f, 0.f, 1.f, 1.f);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawArrays(GL_TRIANGLES, 0, 6);
-
         SDL_GL_SwapWindow(window->sdl_window);
     }
 
@@ -133,8 +185,11 @@ std::string read_file(std::string filename)
     file.seekg(0, std::ios::beg);
 
     char *med = (char*)malloc(sizeof(char)*size);
+    memset(med, 0, size);
     file.read(med, size);
-    std::string result = med + '\0';
+
+    std::string result = std::string(med);
+    result[size] = '\0';
     return result;
 }
 
@@ -243,21 +298,6 @@ Scene *pop_scene()
 }
 
 
-void init_texture(Texture *texture)
-{
-    if (texture == nullptr) {
-        std::cout << "texture is null" << std::endl;
-        exit(1);
-    }
-
-    static int texture_ids = 0;
-
-    memset(texture, 0, sizeof(Texture));
-
-    texture->id = ++texture_ids;
-}
-
-
 void init_shader(Shader *shader, std::string name, std::string vertex_filename, std::string fragment_filename)
 {
     if ( shader == nullptr ) {
@@ -358,7 +398,7 @@ GLint get_shader_uniform_location(Shader *shader, std::string uniform_name)
 
         if ( location < 0 ) {
             std::cout << "Uniform location " << uniform_name << " not found!" << std::endl;
-            exit(1);
+            // exit(1);
         }
         
         (*shader->uniform_locations)[uniform_name] = location;
@@ -397,6 +437,17 @@ void set_shader_uniform_1f(Shader *shader, std::string uniform_name, float value
 }
 
 
+void set_shader_uniform_matrix4fv(Shader *shader, std::string uniform_name, int count, bool transpose, glm::mat4 *matrices)
+{
+    if ( shader == nullptr ) {
+        std::cout << "Attempt to read nullptr instead of shader" << std::endl;
+        exit(1);
+    }
+
+    GLint location = get_shader_uniform_location(shader, uniform_name);
+    glUniformMatrix4fv(location, count, transpose, (GLfloat*)matrices);
+}
+
 
 void use_shader(Shader *shader) 
 {
@@ -433,6 +484,176 @@ void create_window(Window *win, std::string &title, int width, int height)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glewExperimental = GL_TRUE;
     glewInit();
+}
+
+
+void init_texture(Texture *texture, std::string image_name, std::string image_path)
+{
+    if (texture == nullptr) {
+        std::cout << "cannot initialize texture when it is null" << std::endl;
+        exit(1);
+    }
+
+    static int texture_ids = 0;
+
+    memset(texture, 0, sizeof(Texture));
+
+    texture->id = ++texture_ids;
+
+    SDL_Surface *med_surface = IMG_Load(image_path.c_str());
+
+    if ( !med_surface ) {
+        std::cout << "Could not load image named: " << image_path << std::endl;
+        exit(1);
+    }
+
+    texture->image_size = glm::vec2(med_surface->w, med_surface->h);
+
+    glGenTextures(1, &texture->glid);
+    glBindTexture(GL_TEXTURE_2D, texture->glid);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, med_surface->w, med_surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)med_surface->pixels);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    SDL_FreeSurface(med_surface);
+}
+
+
+void init_entity(Entity *entity, Scene *scene, glm::vec3 position, glm::vec3 scale, glm::vec3 rotation)
+{
+    if (entity == nullptr) {
+        std::cout << "cannot initialize entity when it is null" << std::endl;
+        exit(1);
+    }
+
+    if (scene == nullptr) {
+        std::cout << "initializing entity with no scene. Probably a child." << std::endl;
+        // exit(1);
+    }
+
+    static int entity_ids = 0;
+
+    memset(entity, 0, sizeof(Entity));
+
+    entity->id = ++entity_ids;
+    entity->scene = scene;
+    entity->sprite = nullptr;
+    entity->children = new std::list<Entity *>();
+
+    entity->position = position;
+    entity->scale = scale;
+    entity->rotation = rotation;
+}
+
+
+void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 frame_offset, glm::vec2 frame_size) 
+{
+    if (sprite == nullptr) { 
+        std::cout << "cannot initialize sprite when it is null" << std::endl;
+        exit(1);
+    }
+
+    if (parent == nullptr) {
+        std::cout << "cannot set sprite parent to null entity" << std::endl;
+        exit(1);
+    }
+
+    if (texture == nullptr) {
+        std::cout << "sprite cannot use null texture" << std::endl;
+        exit(1);
+    }
+
+    static int sprite_ids = 0;
+
+    memset(sprite, 0, sizeof(Sprite));
+
+    sprite->id = ++sprite_ids;
+    sprite->parent = parent;
+    sprite->texture = texture;
+    sprite->texture_frame_offset = frame_offset;
+
+    if (frame_size == glm::vec2(0.f, 0.f)) {
+        sprite->texture_frame_size = sprite->texture->image_size;
+    }
+    else {
+        sprite->texture_frame_size = frame_size;
+    }
+}
+
+
+void add_entity(Entity *entity, Entity *parent)
+{
+    if (entity == nullptr) { 
+        std::cout << "cannot set entity property when its null" << std::endl;
+        exit(1);
+    }
+
+    if (parent == nullptr) {
+        std::cout << "cannot set parent to null entity" << std::endl;
+        exit(1);
+    }
+
+    entity->parent = parent;
+    parent->children->push_back(entity);
+}
+
+
+void draw_entity(Entity *entity)
+{
+    if (entity == nullptr) {
+        std::cout << "Cannot draw null entity" << std::endl;
+        exit(1);
+    }
+
+    Shader *sprite_shader = SHADERS["sprite"];
+
+    if (!sprite_shader){
+        std::cout << "Coudl not locate sprite shader... it might not be initialized" << std::endl;
+        exit(1);
+    }
+
+    use_shader(sprite_shader);
+    set_shader_uniform_1i(sprite_shader, "sprite_texture", 0);
+
+    // draw children first
+    for(auto iter = entity->children->begin(); iter != entity->children->end(); iter++) {
+        draw_entity(*iter);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, entity->sprite->texture->glid);
+    glActiveTexture(GL_TEXTURE0);
+
+    glm::mat4 projection = glm::ortho(0.f, (float)SCREEN_WIDTH, 0.f, (float)SCREEN_HEIGHT, 0.0f, 100.f);
+    glm::mat4 view = glm::mat4(1.f);
+    glm::mat4 model = glm::mat4(1.f);
+
+
+    glm::vec3 translate_offset = glm::vec3(0.f);
+    if (entity->parent) {
+        translate_offset = entity->parent->position;
+    }
+
+    model = glm::translate(model, translate_offset + entity->position);
+    model = glm::scale(model, entity->scale);
+
+    model = glm::rotate(model, glm::radians(entity->rotation.x), glm::vec3(1.f, 0.f, 0.f));
+    model = glm::rotate(model, glm::radians(entity->rotation.y), glm::vec3(0.f, 1.f, 0.f));
+    model = glm::rotate(model, glm::radians(entity->rotation.z), glm::vec3(0.f, 0.f, 1.f));
+
+    set_shader_uniform_matrix4fv(sprite_shader, "projection", 1, false, &projection);
+    set_shader_uniform_matrix4fv(sprite_shader, "view", 1, false, &view);
+    set_shader_uniform_matrix4fv(sprite_shader, "model", 1, false, &model);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
 }

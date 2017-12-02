@@ -15,6 +15,9 @@
 
 #include <glm/glm.hpp>
 
+#define MALLOC(T) ((T*)malloc(sizeof(T)))
+
+
 struct Window {
     SDL_Window *sdl_window;
     SDL_GLContext context;
@@ -40,6 +43,10 @@ struct Shader {
 struct Texture {
     int id;
     GLuint glid;
+
+    std::string name;
+    std::string image_path;
+    glm::vec2 image_size;
 };
 
 struct Frame {
@@ -51,20 +58,30 @@ struct Frame {
 };
 
 
+struct Entity;
 struct Sprite {
     int id;
+
+    Entity *parent;
+    Texture *texture;
+
+    glm::vec2 texture_frame_offset;
+    glm::vec2 texture_frame_size;
 };
 
 struct Scene;
 struct Entity {
     int id;
     Scene *scene;
-    
+    Sprite *sprite;
+    Entity *parent;
+    // std::sprite_hook = 
+
+    std::list<Entity *> *children;
+
     glm::vec3 position;
     glm::vec3 rotation;
-    glm::vec3 scale; 
-
-    std::list<Entity *> children;
+    glm::vec3 scale;
 };
 
 struct Scene {
