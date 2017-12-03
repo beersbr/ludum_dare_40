@@ -23,6 +23,18 @@
 #define TERABYTES(n) (GIGABYTES(n)*1024)
 
 
+struct GamePadController {
+    bool btn_up;
+    bool btn_down;
+    bool btn_left;
+    bool btn_right;
+
+    bool btn_a;
+    bool btn_b;
+    bool btn_x;
+    bool btn_y;
+};
+
 struct Window {
     SDL_Window *sdl_window;
     SDL_GLContext context;
@@ -119,7 +131,7 @@ struct Scene {
     bool initialized;
     bool should_end;
 
-    std::list <Entity *> entities;
+    std::list <Entity *> *entities;
 
     SceneStartupFunc startup;
     SceneUpdateFunc update;
@@ -127,6 +139,7 @@ struct Scene {
 
     Entity *player;
 
+    GamePadController gamepadcontroller;
 };
 
 
@@ -164,15 +177,3 @@ struct Player {
     PROJECTILE_TYPE projectile_type;
 };
 
-
-struct GamePadController {
-    bool btn_up;
-    bool btn_down;
-    bool btn_left;
-    bool btn_right;
-
-    bool btn_a;
-    bool btn_b;
-    bool btn_x;
-    bool btn_y;
-};

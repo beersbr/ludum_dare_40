@@ -17,6 +17,9 @@
 
 #include "types.h"
 
+#include "objects.hpp"
+#include "objects.cpp"
+
 /*********************************************************************
  GLOBALS
  *********************************************************************/
@@ -54,15 +57,13 @@ void init_texture(Texture *texture, std::string name, std::string image_path);
 void init_entity(Entity *entity, glm::vec3 position, glm::vec3 scale = glm::vec3(1.f, 1.f, 1.f), glm::vec3 rotation = glm::vec3(0.f, 0.f, 0.f));
 void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 offset = glm::vec2(0.f, 0.f), glm::vec2 frame_size = glm::vec2(0.f, 0.f));
 
-void add_entity(Entity *entity, Entity *parent);
-void add_entity(Scene *entity, Entity *child);
+void add_entity(Entity *entity, Entity *child);
+void add_scene_entity(Scene *scene, Entity *child);
 
 void *MemoryArenaAlloc(MemoryArena *arena, int size);
 
 void draw_entity(Entity *entity);
 void draw_scene(Scene* scene);
-
-void setup_player(Player* player);
 
 void main_scene_starup(Scene *scene);
 void main_scene_update(Scene *scene, float elapsed_time_s);
@@ -105,7 +106,7 @@ int main(int argc, char * argv[])
     scene->update = &main_scene_update;
     scene->shutdown = &main_scene_shutdown;
 
-    
+    use_scene(scene);
 
     bool running = true;
 
@@ -214,14 +215,7 @@ int main(int argc, char * argv[])
         // std::cout << "FPS: " << frames/total_time_s << std::endl;
         frame_interval_s = target_frame_time_s + frame_interval_s;
 
-        //NOTE(Brett): Draw scene
-        use_shader(default_shader);
-        use_frame(&scene->frame);
-
-        glClearColor(0.f, 0.f, 0.5f, 0.f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // draw_scene()
+        draw_scene(current_scene);
 
         use_frame(nullptr);
         use_shader(frame_shader);
@@ -274,6 +268,7 @@ void init_scene(Scene *scene, std::string name)
 
     memset(scene, 0, sizeof(Scene));
     scene->id = ++scene_ids;
+    scene->entities = new std::list<Entity *>();
 
     scene->memory_arena.memory_size = DEFAULT_MEMORY_ARENA_SIZE_MB;
     scene->memory_arena.memory = (unsigned char *)malloc(scene->memory_arena.memory_size*sizeof(unsigned char));
@@ -358,8 +353,9 @@ void use_scene(Scene *scene)
         exit(1);
     }
 
-    // Scene *scene = SCENE_STACK.back();
-    SCENE_STACK.pop_back();
+    if (SCENE_STACK.size() > 0) {
+        SCENE_STACK.pop_back();
+    }
     SCENE_STACK.push_back(scene);
 }
 
@@ -598,7 +594,7 @@ void init_texture(Texture *texture, std::string image_name, std::string image_pa
 
     SDL_FreeSurface(med_surface);
 
-    TEXTURES["ship_texture"] = texture;
+    TEXTURES[image_name] = texture;
 
 }
 
@@ -661,7 +657,7 @@ void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 fra
 }
 
 
-void add_entity(Entity *entity, Scene *scene)
+void add_scene_entity(Scene *scene, Entity *entity)
 {
     if (entity == nullptr) { 
         std::cout << "cannot set entity property when its null" << std::endl;
@@ -673,42 +669,25 @@ void add_entity(Entity *entity, Scene *scene)
         exit(1);
     }
 
-    scene->entities.push_back(entity);
+    scene->entities->push_back(entity);
     entity->scene = scene;
 }
 
 
-void add_entity(Entity *entity, Entity *parent)
+void add_entity(Entity *entity, Entity *child)
 {
     if (entity == nullptr) { 
         std::cout << "cannot set entity property when its null" << std::endl;
         exit(1);
     }
 
-    if (parent == nullptr) {
-        std::cout << "cannot set parent to null entity" << std::endl;
+    if (child == nullptr) {
+        std::cout << "cannot set child as null entity" << std::endl;
         exit(1);
     }
 
-    entity->parent = parent;
-    parent->children->push_back(entity);
-}
-
-
-void add_entity(Scene *scene, Entity *child)
-{
-    if (scene == nullptr) {
-        std::cout << "cannot add entity to null scene" << std::endl;
-        exit(1);
-    }
-
-    if (child == nullptr) {    
-        std::cout << "cannot set entity property when its null" << std::endl;
-        exit(1);
-    }
-
-    child->scene = scene;
-    scene->entities.push_back(child);
+    child->parent = entity;
+    entity->children->push_back(child);
 }
 
 
@@ -746,7 +725,10 @@ void draw_entity(Entity *entity)
     set_shader_uniform_1i(sprite_shader, "sprite_texture", 0);
 
     // draw children first
+
+    std::cout << "Drawing tag: " << entity->id << " @ " << entity->tag << std::endl;
     for(auto iter = entity->children->begin(); iter != entity->children->end(); iter++) {
+        std::cout << "draw ID: " << (*iter)->id << std::endl; 
         draw_entity(*iter);
     }
 
@@ -779,21 +761,29 @@ void draw_entity(Entity *entity)
 
 }
 
+
 void draw_scene(Scene *scene)
 {
+    if (scene == nullptr) {
+        std::cout << "Current scene is null... there is nothing to draw" << std::endl;
+        exit(1);
+    }
 
+    use_shader(SHADERS["default"]);
+    use_frame(&scene->frame);
+
+    glClearColor(0.f, 0.f, 0.5f, 0.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    draw_entity(scene->player);
 }
 
-void setup_player(Player* player)
-{
-
-}
 
 void main_scene_starup(Scene *scene)
 {
     // void *MemoryArenaMalloc(MemoryArena *arena, int size);
     scene->player = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));
-    scene->player.tag = "player";
+    scene->player->tag = "player";
     init_entity(scene->player,
                 glm::vec3(SCREEN_WIDTH/2.f, SCREEN_HEIGHT/2.f, 0.f),
                 glm::vec3(1.f, 1.f, 1.f),
@@ -815,14 +805,14 @@ void main_scene_starup(Scene *scene)
     option->sprite = (Sprite*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Sprite));
     init_sprite(option->sprite, option, TEXTURES["blue_option"]);
 
-    add_entity(option, scene->player);
-    add_entity(scene->player, scene);
+    add_entity(scene->player, option);
+    add_scene_entity(scene, scene->player);
 }
 
 
 void main_scene_update(Scene *scene, float elapsed_time_s) 
 {
-    float angle += 90.f * elapsed_time_s;
+    float angle = 90.f * elapsed_time_s;
     float option_radius = 80.f;
 
     // option->position = glm::vec3(option_radius * cosf(glm::radians(angle)), option_radius * sinf(glm::radians(angle)), -1.f);
@@ -831,26 +821,26 @@ void main_scene_update(Scene *scene, float elapsed_time_s)
 
     scene->player->acceleration = glm::vec3(0.f);
 
-    if (player_controller.btn_up) {
+    if (scene->gamepadcontroller.btn_up) {
         scene->player->acceleration.y += 1.0f;
     }
-    else if (player_controller.btn_down) {
+    else if (scene->gamepadcontroller.btn_down) {
         scene->player->acceleration.y -= 1.0f;
     }
-    if (player_controller.btn_left) {
+    if (scene->gamepadcontroller.btn_left) {
         scene->player->acceleration.x -= 1.f;
     }
-    else if (player_controller.btn_right) {
+    else if (scene->gamepadcontroller.btn_right) {
         scene->player->acceleration.x += 1.f;
     }
 
-    if (glm::length(player->acceleration) > 0.f) {
-        scene->player->acceleration = glm::normalize(player->acceleration);
-        scene->player->velocity += player->acceleration * (player_velocity_per_second*elapsed_time_s);
+    if (glm::length(scene->player->acceleration) > 0.f) {
+        scene->player->acceleration = glm::normalize(scene->player->acceleration);
+        scene->player->velocity += scene->player->acceleration * (player_velocity_per_second*elapsed_time_s);
     }
 
-    scene->player->velocity += player->velocity * -1.f * 0.15f;
-    scene->player->position += player->velocity;
+    scene->player->velocity += scene->player->velocity * -1.f * 0.15f;
+    scene->player->position += scene->player->velocity;
 }
 
 
