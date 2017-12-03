@@ -60,6 +60,9 @@ void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 off
 void add_entity(Entity *entity, Entity *child);
 void add_scene_entity(Scene *scene, Entity *child);
 
+void set_entity_tag(Scene *scene, Entity *entity, std::string tag);
+Entity *get_entity_by_tag(Scene *scene, std::string tag);
+
 void *MemoryArenaAlloc(MemoryArena *arena, int size);
 
 void draw_entity(Entity *entity);
@@ -267,6 +270,7 @@ void init_scene(Scene *scene, std::string name)
     memset(scene, 0, sizeof(Scene));
     scene->id = ++scene_ids;
     scene->entities = new std::list<Entity *>();
+    scene->tagged_entities = new std::map<std::string, Entity *>();
 
     scene->memory_arena.memory_size = DEFAULT_MEMORY_ARENA_SIZE_MB;
     scene->memory_arena.memory = (unsigned char *)malloc(scene->memory_arena.memory_size*sizeof(unsigned char));
@@ -611,6 +615,7 @@ void init_entity(Entity *entity, glm::vec3 position, glm::vec3 scale, glm::vec3 
     entity->id = ++entity_ids;
     entity->sprite = nullptr;
     entity->children = new std::list<Entity *>();
+    entity->tag = std::string();
 
     entity->acceleration = glm::vec3(0.f);
     entity->velocity = glm::vec3(0.f);
@@ -652,6 +657,37 @@ void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 fra
     else {
         sprite->texture_frame_size = frame_size;
     }
+}
+
+
+void set_entity_tag(Scene *scene, Entity *entity, std::string tag)
+{
+    if (scene == nullptr) {
+        std::cout << "Cannot tag into null scene" << std::endl;
+        exit(1);
+    }
+
+    if (entity == nullptr) {
+        std::cout << "cannot tag null entity" << std::endl;
+        exit(1);
+    }
+
+    scene->tagged_entities->insert(std::pair<std::string, Entity *>(tag, entity));
+}
+
+
+Entity *get_entity_by_tag(Scene *scene, std::string tag)
+{
+    if (scene == nullptr) {
+        std::cout << "Cannot tag into null scene" << std::endl;
+        exit(1);
+    }
+
+    if (scene->tagged_entities->find(tag) == scene->tagged_entities->end()) {
+        return nullptr;
+    }
+
+    return scene->tagged_entities->at(tag);
 }
 
 
@@ -738,7 +774,6 @@ void draw_entity(Entity *entity)
     glm::mat4 view = glm::mat4(1.f);
     glm::mat4 model = glm::mat4(1.f);
 
-
     glm::vec3 translate_offset = glm::vec3(0.f);
     if (entity->parent) {
         translate_offset = entity->parent->position;
@@ -782,11 +817,12 @@ void main_scene_starup(Scene *scene)
 {
     // void *MemoryArenaMalloc(MemoryArena *arena, int size);
     scene->player = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));
-    scene->player->tag = "player";
     init_entity(scene->player,
                 glm::vec3(SCREEN_WIDTH/2.f, SCREEN_HEIGHT/2.f, 0.f),
                 glm::vec3(1.f, 1.f, 1.f),
                 glm::vec3(0.f, 0.f, 0.f));
+    
+    set_entity_tag(scene, scene->player, "player1");
 
     scene->player->sprite = (Sprite*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Sprite));
     init_sprite(scene->player->sprite, scene->player, TEXTURES["blue_ship"]);
@@ -801,6 +837,7 @@ void main_scene_starup(Scene *scene)
                 glm::vec3(30.f, 30.f, 30.f),
                 glm::vec3(0.f, 0.f, 0.f));
     
+    set_entity_tag(scene, option, "option1");
     option->sprite = (Sprite*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Sprite));
     init_sprite(option->sprite, option, TEXTURES["blue_option"]);
 
@@ -813,10 +850,13 @@ void main_scene_starup(Scene *scene)
 
 void main_scene_update(Scene *scene, float elapsed_time_s) 
 {
-    float angle = 90.f * elapsed_time_s;
+    static float angle = 0.f;
+    angle += (90.f * elapsed_time_s);
     float option_radius = 80.f;
 
-    // option->position = glm::vec3(option_radius * cosf(glm::radians(angle)), option_radius * sinf(glm::radians(angle)), -1.f);
+    Entity *option = get_entity_by_tag(scene, "option1");
+
+    option->position = glm::vec3(option_radius * cosf(glm::radians(angle)), option_radius * sinf(glm::radians(angle)), -1.f);
 
     float player_velocity_per_second = 100.f;
 

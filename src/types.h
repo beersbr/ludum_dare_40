@@ -132,6 +132,7 @@ struct Scene {
     bool should_end;
 
     std::list <Entity *> *entities;
+    std::map <std::string, Entity *> *tagged_entities;
 
     SceneStartupFunc startup;
     SceneUpdateFunc update;
