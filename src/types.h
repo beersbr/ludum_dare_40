@@ -69,16 +69,19 @@ struct Sprite {
     glm::vec2 texture_frame_size;
 };
 
+
+
 struct Scene;
 struct Entity {
     int id;
     Scene *scene;
     Sprite *sprite;
     Entity *parent;
-    // std::sprite_hook = 
 
     std::list<Entity *> *children;
 
+    glm::vec3 acceleration;
+    glm::vec3 velocity;
     glm::vec3 position;
     glm::vec3 rotation;
     glm::vec3 scale;

@@ -13,6 +13,7 @@
 #include <SDL2/SDL_Image.h>
 
 #include <glm/glm.hpp>
+#include <glm/ext.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "types.h"
@@ -117,16 +118,24 @@ int main(int argc, char * argv[])
 
     bool running = true;
 
-    int start_time = SDL_GetTicks();
-    int current_time = start_time;
+    float start_time = SDL_GetTicks();
+    float total_time_s = 0.0f;
+    float current_time = start_time;
 
     float angle = 0.f;
-
     SDL_Event event;
+
+    float target_fps = 60.f;
+    float target_frame_time_s = 1.f/target_fps;
+    float frame_interval_s = 0.f;
+    float frames = 0.f;
+
     while(running) {
         int last_time = current_time;
         current_time = SDL_GetTicks();
-        float elapsed_time_seconds = (current_time - last_time)/ 1000.f;
+        float elapsed_time_s = (current_time - last_time)/ 1000.f;
+
+        total_time_s += elapsed_time_s;
 
         while(SDL_PollEvent(&event)) {
             switch(event.type) {
@@ -197,22 +206,43 @@ int main(int argc, char * argv[])
             }
         }
         
-        angle += 90.f * elapsed_time_seconds;
+        angle += 90.f * elapsed_time_s;
         option->position = glm::vec3(100.f * cosf(glm::radians(angle)), 100.f * sinf(glm::radians(angle)), -1.f);
 
+        float player_velocity_per_second = 100.f;
+
+        player->acceleration = glm::vec3(0.f);
+
         if (player_controller.btn_up) {
-            player->position.y += 1.0f;
+            player->acceleration.y += 1.0f;
         }
         else if (player_controller.btn_down) {
-            player->position.y -= 1.0f;
+            player->acceleration.y -= 1.0f;
         }
 
         if (player_controller.btn_left) {
-            player->position.x -= 1.f;
+            player->acceleration.x -= 1.f;
         }
         else if (player_controller.btn_right) {
-            player->position.x += 1.f;
+            player->acceleration.x += 1.f;
         }
+
+        if (glm::length(player->acceleration) > 0.f) {
+            player->acceleration = glm::normalize(player->acceleration);
+            player->velocity += player->acceleration * (player_velocity_per_second*elapsed_time_s);
+        }
+
+        player->velocity += player->velocity * -1.f * 0.1f;
+        player->position += player->velocity;
+
+        if (frame_interval_s > 0.f ) {
+            frame_interval_s -= elapsed_time_s;
+            continue;
+        }
+
+        frames += 1;
+        // std::cout << "FPS: " << frames/total_time_s << std::endl;
+        frame_interval_s = target_frame_time_s + frame_interval_s;
 
         //NOTE(Brett): Draw scene
         use_shader(default_shader);
@@ -232,6 +262,7 @@ int main(int argc, char * argv[])
         // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         SDL_GL_SwapWindow(window->sdl_window);
+        
     }
 
     return 0;
@@ -618,6 +649,8 @@ void init_entity(Entity *entity, Scene *scene, glm::vec3 position, glm::vec3 sca
     entity->sprite = nullptr;
     entity->children = new std::list<Entity *>();
 
+    entity->acceleration = glm::vec3(0.f);
+    entity->velocity = glm::vec3(0.f);
     entity->position = position;
     entity->scale = scale;
     entity->rotation = rotation;
