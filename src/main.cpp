@@ -69,6 +69,8 @@ int main(int argc, char * argv[])
     std::string window_title = "ludum dare 40";
     create_window(window, window_title, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    Controller player_controller = {};
+
     //TODO(Brett): add memory manager...
     Shader *default_shader = MALLOC(Shader);
     Shader *frame_shader = MALLOC(Shader);
@@ -118,10 +120,13 @@ int main(int argc, char * argv[])
     int start_time = SDL_GetTicks();
     int current_time = start_time;
 
+    float angle = 0.f;
+
     SDL_Event event;
     while(running) {
         int last_time = current_time;
         current_time = SDL_GetTicks();
+        float elapsed_time_seconds = (current_time - last_time)/ 1000.f;
 
         while(SDL_PollEvent(&event)) {
             switch(event.type) {
@@ -138,9 +143,75 @@ int main(int argc, char * argv[])
                             running = false;
                             break;
                         }
+
+                        case SDLK_UP:
+                        {
+                            player_controller.btn_up = true;
+                            break;
+                        }
+                        case SDLK_DOWN:
+                        {
+                            player_controller.btn_down = true;
+                            break;
+                        }
+                        case SDLK_LEFT:
+                        {
+                            player_controller.btn_left = true;
+                            break;
+                        }
+                        case SDLK_RIGHT:
+                        {
+                            player_controller.btn_right = true;
+                            break;
+                        }
+                    }
+
+                    break;
+                }
+                case SDL_KEYUP:
+                {
+                    switch(event.key.keysym.sym) {
+                        case SDLK_UP:
+                        {
+                            player_controller.btn_up = false;
+                            break;
+                        }
+                        case SDLK_DOWN:
+                        {
+                            player_controller.btn_down = false;
+                            break;
+                        }
+                        case SDLK_LEFT:
+                        {
+                            player_controller.btn_left = false;
+                            break;
+                        }
+                        case SDLK_RIGHT:
+                        {
+                            player_controller.btn_right = false;
+                            break;
+                        }
+                        break;
                     }
                 }
             }
+        }
+        
+        angle += 90.f * elapsed_time_seconds;
+        option->position = glm::vec3(100.f * cosf(glm::radians(angle)), 100.f * sinf(glm::radians(angle)), -1.f);
+
+        if (player_controller.btn_up) {
+            player->position.y += 1.0f;
+        }
+        else if (player_controller.btn_down) {
+            player->position.y -= 1.0f;
+        }
+
+        if (player_controller.btn_left) {
+            player->position.x -= 1.f;
+        }
+        else if (player_controller.btn_right) {
+            player->position.x += 1.f;
         }
 
         //NOTE(Brett): Draw scene
@@ -151,8 +222,6 @@ int main(int argc, char * argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         draw_entity(player);
-
-
 
         use_frame(nullptr);
         use_shader(frame_shader);

@@ -92,3 +92,16 @@ struct Scene {
 
     std::list <Entity *> entities;
 };
+
+
+struct Controller {
+    bool btn_up;
+    bool btn_down;
+    bool btn_left;
+    bool btn_right;
+
+    bool btn_a;
+    bool btn_b;
+    bool btn_x;
+    bool btn_y;
+};
