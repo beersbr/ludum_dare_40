@@ -696,6 +696,7 @@ void *MemoryArenaAlloc(MemoryArena *arena, int size)
     void *ret_address = arena->current_memory_pointer;
 
     if ((arena->current_memory_pointer + size) < (arena->memory + arena->memory_size)) {
+        arena->current_memory_pointer += size;
         return ret_address;
     }
     else {
@@ -807,6 +808,8 @@ void main_scene_starup(Scene *scene)
 
     add_entity(scene->player, option);
     add_scene_entity(scene, scene->player);
+
+    scene->initialized = true;
 }
 
 
