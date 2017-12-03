@@ -108,7 +108,7 @@ struct GameController {
 
 };
 
-int DEFAULT_MEMORY_ARENA_SIZE_MB = MEGABYTES(1024);
+int DEFAULT_MEMORY_ARENA_SIZE_MB = MEGABYTES(64);
 struct MemoryArena {
     unsigned char *memory;
     int memory_size;

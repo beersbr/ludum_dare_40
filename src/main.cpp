@@ -761,9 +761,9 @@ void draw_entity(Entity *entity)
 
     // draw children first
 
-    std::cout << "Drawing tag: " << entity->id << " @ " << entity->tag << std::endl;
+    // std::cout << "Drawing tag: " << entity->id << " @ " << entity->tag << std::endl;
     for(auto iter = entity->children->begin(); iter != entity->children->end(); iter++) {
-        std::cout << "draw ID: " << (*iter)->id << std::endl; 
+        // std::cout << "draw ID: " << (*iter)->id << std::endl; 
         draw_entity(*iter);
     }
 
@@ -850,6 +850,7 @@ void main_scene_starup(Scene *scene)
 
 void main_scene_update(Scene *scene, float elapsed_time_s) 
 {
+    static float main_shoot_interval_s = 0.5f;
     static float angle = 0.f;
     angle += (90.f * elapsed_time_s);
     float option_radius = 80.f;
@@ -882,6 +883,8 @@ void main_scene_update(Scene *scene, float elapsed_time_s)
 
     scene->player->velocity += scene->player->velocity * -1.f * 0.15f;
     scene->player->position += scene->player->velocity;
+
+
 }
 
 
