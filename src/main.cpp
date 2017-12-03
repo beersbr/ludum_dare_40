@@ -82,8 +82,6 @@ int main(int argc, char * argv[])
     std::string window_title = "ludum dare 40";
     create_window(window, window_title, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    GamePadController player_controller = {};
-
     //TODO(Brett): add memory manager...
     Shader *default_shader = MALLOC(Shader);
     Shader *frame_shader = MALLOC(Shader);
@@ -147,22 +145,22 @@ int main(int argc, char * argv[])
 
                         case SDLK_UP:
                         {
-                            player_controller.btn_up = true;
+                            scene->gamepadcontroller.btn_up = true;
                             break;
                         }
                         case SDLK_DOWN:
                         {
-                            player_controller.btn_down = true;
+                            scene->gamepadcontroller.btn_down = true;
                             break;
                         }
                         case SDLK_LEFT:
                         {
-                            player_controller.btn_left = true;
+                            scene->gamepadcontroller.btn_left = true;
                             break;
                         }
                         case SDLK_RIGHT:
                         {
-                            player_controller.btn_right = true;
+                            scene->gamepadcontroller.btn_right = true;
                             break;
                         }
                     }
@@ -174,22 +172,22 @@ int main(int argc, char * argv[])
                     switch(event.key.keysym.sym) {
                         case SDLK_UP:
                         {
-                            player_controller.btn_up = false;
+                            scene->gamepadcontroller.btn_up = false;
                             break;
                         }
                         case SDLK_DOWN:
                         {
-                            player_controller.btn_down = false;
+                            scene->gamepadcontroller.btn_down = false;
                             break;
                         }
                         case SDLK_LEFT:
                         {
-                            player_controller.btn_left = false;
+                            scene->gamepadcontroller.btn_left = false;
                             break;
                         }
                         case SDLK_RIGHT:
                         {
-                            player_controller.btn_right = false;
+                            scene->gamepadcontroller.btn_right = false;
                             break;
                         }
                         break;
