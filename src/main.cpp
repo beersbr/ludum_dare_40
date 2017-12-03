@@ -1,4 +1,3 @@
-#include <windows.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -24,6 +23,7 @@
 
 static Window *window = nullptr;
 static std::map<std::string, Shader *> SHADERS;
+static std::map<std::string, Texture *> TEXTURES;
 
 static int SCREEN_WIDTH = 1200;
 static int SCREEN_HEIGHT = 800;
@@ -51,11 +51,22 @@ void use_shader(Shader *shader);
 void create_window(Window *win, std::string &title, int width, int height);
 
 void init_texture(Texture *texture, std::string name, std::string image_path);
-void init_entity(Entity *entity, Scene *scene, glm::vec3 position, glm::vec3 scale = glm::vec3(1.f, 1.f, 1.f), glm::vec3 rotation = glm::vec3(0.f, 0.f, 0.f));
+void init_entity(Entity *entity, glm::vec3 position, glm::vec3 scale = glm::vec3(1.f, 1.f, 1.f), glm::vec3 rotation = glm::vec3(0.f, 0.f, 0.f));
 void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 offset = glm::vec2(0.f, 0.f), glm::vec2 frame_size = glm::vec2(0.f, 0.f));
+
 void add_entity(Entity *entity, Entity *parent);
+void add_entity(Scene *entity, Entity *child);
+
+void *MemoryArenaAlloc(MemoryArena *arena, int size);
 
 void draw_entity(Entity *entity);
+void draw_scene(Scene* scene);
+
+void setup_player(Player* player);
+
+void main_scene_starup(Scene *scene);
+void main_scene_update(Scene *scene, float elapsed_time_s);
+void main_scene_shutdown(Scene *scene);
 
 /*********************************************************************
  PROGRAM
@@ -70,7 +81,7 @@ int main(int argc, char * argv[])
     std::string window_title = "ludum dare 40";
     create_window(window, window_title, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    Controller player_controller = {};
+    GamePadController player_controller = {};
 
     //TODO(Brett): add memory manager...
     Shader *default_shader = MALLOC(Shader);
@@ -90,31 +101,11 @@ int main(int argc, char * argv[])
     Scene *scene = MALLOC(Scene);
     init_scene(scene, "main_scene");
 
-
-    Entity *player = MALLOC(Entity);
-    init_entity(player, scene,
-                glm::vec3(SCREEN_WIDTH/2.f, SCREEN_HEIGHT/2.f, 0.f),
-                glm::vec3(1.f, 1.f, 1.f),
-                glm::vec3(0.f, 0.f, 0.f));
-
-    player->sprite = MALLOC(Sprite);
-    init_sprite(player->sprite, player, ship_texture);
-    
-    glm::vec2 image_size = player->sprite->texture->image_size;
-    player->scale = glm::vec3(image_size.x, image_size.y, 0.f);
-    player->rotation = glm::vec3(180.f, 0.f, 0.f);
+    scene->startup = &main_scene_starup;
+    scene->update = &main_scene_update;
+    scene->shutdown = &main_scene_shutdown;
 
     
-    Entity *option = MALLOC(Entity);
-    init_entity(option, nullptr,
-                glm::vec3(100.f, 0.f, -1.f),
-                glm::vec3(30.f, 30.f, 30.f),
-                glm::vec3(0.f, 0.f, 0.f));
-    
-    option->sprite = MALLOC(Sprite);
-    init_sprite(option->sprite, option, option_texture);
-
-    add_entity(option, player);
 
     bool running = true;
 
@@ -205,35 +196,14 @@ int main(int argc, char * argv[])
                 }
             }
         }
-        
-        angle += 90.f * elapsed_time_s;
-        option->position = glm::vec3(100.f * cosf(glm::radians(angle)), 100.f * sinf(glm::radians(angle)), -1.f);
 
-        float player_velocity_per_second = 100.f;
-
-        player->acceleration = glm::vec3(0.f);
-
-        if (player_controller.btn_up) {
-            player->acceleration.y += 1.0f;
+        Scene *current_scene = SCENE_STACK.back();
+        if (!current_scene->initialized) {
+            scene->startup(scene);
         }
-        else if (player_controller.btn_down) {
-            player->acceleration.y -= 1.0f;
+        else {
+            scene->update(scene, elapsed_time_s);
         }
-
-        if (player_controller.btn_left) {
-            player->acceleration.x -= 1.f;
-        }
-        else if (player_controller.btn_right) {
-            player->acceleration.x += 1.f;
-        }
-
-        if (glm::length(player->acceleration) > 0.f) {
-            player->acceleration = glm::normalize(player->acceleration);
-            player->velocity += player->acceleration * (player_velocity_per_second*elapsed_time_s);
-        }
-
-        player->velocity += player->velocity * -1.f * 0.1f;
-        player->position += player->velocity;
 
         if (frame_interval_s > 0.f ) {
             frame_interval_s -= elapsed_time_s;
@@ -251,7 +221,7 @@ int main(int argc, char * argv[])
         glClearColor(0.f, 0.f, 0.5f, 0.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        draw_entity(player);
+        // draw_scene()
 
         use_frame(nullptr);
         use_shader(frame_shader);
@@ -300,11 +270,15 @@ void init_scene(Scene *scene, std::string name)
         std::cout << "scene is null" << std::endl;
         exit(1);
     }
-
     static int scene_ids = 0;
 
     memset(scene, 0, sizeof(Scene));
     scene->id = ++scene_ids;
+
+    scene->memory_arena.memory_size = DEFAULT_MEMORY_ARENA_SIZE_MB;
+    scene->memory_arena.memory = (unsigned char *)malloc(scene->memory_arena.memory_size*sizeof(unsigned char));
+    scene->memory_arena.current_memory_pointer = scene->memory_arena.memory;
+
     glGenVertexArrays(1, &scene->vao);
     glBindVertexArray(scene->vao);
     init_frame(&scene->frame);
@@ -602,9 +576,7 @@ void init_texture(Texture *texture, std::string image_name, std::string image_pa
     static int texture_ids = 0;
 
     memset(texture, 0, sizeof(Texture));
-
     texture->id = ++texture_ids;
-
     SDL_Surface *med_surface = IMG_Load(image_path.c_str());
 
     if ( !med_surface ) {
@@ -625,19 +597,17 @@ void init_texture(Texture *texture, std::string image_name, std::string image_pa
     glBindTexture(GL_TEXTURE_2D, 0);
 
     SDL_FreeSurface(med_surface);
+
+    TEXTURES["ship_texture"] = texture;
+
 }
 
 
-void init_entity(Entity *entity, Scene *scene, glm::vec3 position, glm::vec3 scale, glm::vec3 rotation)
+void init_entity(Entity *entity, glm::vec3 position, glm::vec3 scale, glm::vec3 rotation)
 {
     if (entity == nullptr) {
         std::cout << "cannot initialize entity when it is null" << std::endl;
         exit(1);
-    }
-
-    if (scene == nullptr) {
-        std::cout << "initializing entity with no scene. Probably a child." << std::endl;
-        // exit(1);
     }
 
     static int entity_ids = 0;
@@ -645,7 +615,6 @@ void init_entity(Entity *entity, Scene *scene, glm::vec3 position, glm::vec3 sca
     memset(entity, 0, sizeof(Entity));
 
     entity->id = ++entity_ids;
-    entity->scene = scene;
     entity->sprite = nullptr;
     entity->children = new std::list<Entity *>();
 
@@ -692,6 +661,23 @@ void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 fra
 }
 
 
+void add_entity(Entity *entity, Scene *scene)
+{
+    if (entity == nullptr) { 
+        std::cout << "cannot set entity property when its null" << std::endl;
+        exit(1);
+    }
+
+    if (scene == nullptr) {
+        std::cout << "cannot set parent to null scene" << std::endl;
+        exit(1);
+    }
+
+    scene->entities.push_back(entity);
+    entity->scene = scene;
+}
+
+
 void add_entity(Entity *entity, Entity *parent)
 {
     if (entity == nullptr) { 
@@ -706,6 +692,39 @@ void add_entity(Entity *entity, Entity *parent)
 
     entity->parent = parent;
     parent->children->push_back(entity);
+}
+
+
+void add_entity(Scene *scene, Entity *child)
+{
+    if (scene == nullptr) {
+        std::cout << "cannot add entity to null scene" << std::endl;
+        exit(1);
+    }
+
+    if (child == nullptr) {    
+        std::cout << "cannot set entity property when its null" << std::endl;
+        exit(1);
+    }
+
+    child->scene = scene;
+    scene->entities.push_back(child);
+}
+
+
+void *MemoryArenaAlloc(MemoryArena *arena, int size) 
+{
+    void *ret_address = arena->current_memory_pointer;
+
+    if ((arena->current_memory_pointer + size) < (arena->memory + arena->memory_size)) {
+        return ret_address;
+    }
+    else {
+        std::cout << "Asking for more than the arena can give." << std::endl;
+        exit(1);
+    }
+
+    return nullptr;
 }
 
 
@@ -757,5 +776,85 @@ void draw_entity(Entity *entity)
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+}
+
+void draw_scene(Scene *scene)
+{
+
+}
+
+void setup_player(Player* player)
+{
+
+}
+
+void main_scene_starup(Scene *scene)
+{
+    // void *MemoryArenaMalloc(MemoryArena *arena, int size);
+    scene->player = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));
+    scene->player.tag = "player";
+    init_entity(scene->player,
+                glm::vec3(SCREEN_WIDTH/2.f, SCREEN_HEIGHT/2.f, 0.f),
+                glm::vec3(1.f, 1.f, 1.f),
+                glm::vec3(0.f, 0.f, 0.f));
+
+    scene->player->sprite = (Sprite*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Sprite));
+    init_sprite(scene->player->sprite, scene->player, TEXTURES["blue_ship"]);
+    
+    glm::vec2 image_size = scene->player->sprite->texture->image_size;
+    scene->player->scale = glm::vec3(image_size.x, image_size.y, 0.f);
+    scene->player->rotation = glm::vec3(180.f, 0.f, 0.f);
+
+    Entity *option = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));;
+    init_entity(option,
+                glm::vec3(80.f, 0.f, -1.f),
+                glm::vec3(30.f, 30.f, 30.f),
+                glm::vec3(0.f, 0.f, 0.f));
+    
+    option->sprite = (Sprite*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Sprite));
+    init_sprite(option->sprite, option, TEXTURES["blue_option"]);
+
+    add_entity(option, scene->player);
+    add_entity(scene->player, scene);
+}
+
+
+void main_scene_update(Scene *scene, float elapsed_time_s) 
+{
+    float angle += 90.f * elapsed_time_s;
+    float option_radius = 80.f;
+
+    // option->position = glm::vec3(option_radius * cosf(glm::radians(angle)), option_radius * sinf(glm::radians(angle)), -1.f);
+
+    float player_velocity_per_second = 100.f;
+
+    scene->player->acceleration = glm::vec3(0.f);
+
+    if (player_controller.btn_up) {
+        scene->player->acceleration.y += 1.0f;
+    }
+    else if (player_controller.btn_down) {
+        scene->player->acceleration.y -= 1.0f;
+    }
+    if (player_controller.btn_left) {
+        scene->player->acceleration.x -= 1.f;
+    }
+    else if (player_controller.btn_right) {
+        scene->player->acceleration.x += 1.f;
+    }
+
+    if (glm::length(player->acceleration) > 0.f) {
+        scene->player->acceleration = glm::normalize(player->acceleration);
+        scene->player->velocity += player->acceleration * (player_velocity_per_second*elapsed_time_s);
+    }
+
+    scene->player->velocity += player->velocity * -1.f * 0.15f;
+    scene->player->position += player->velocity;
+}
+
+
+void main_scene_shutdown(Scene *scene)
+{
 
 }

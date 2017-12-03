@@ -17,6 +17,11 @@
 
 #define MALLOC(T) ((T*)malloc(sizeof(T)))
 
+#define KILOBYTES(n) ((n)*1024)
+#define MEGABYTES(n) (KILOBYTES(n)*1024)
+#define GIGABYTES(n) (MEGABYTES(n)*1024)
+#define TERABYTES(n) (GIGABYTES(n)*1024)
+
 
 struct Window {
     SDL_Window *sdl_window;
@@ -70,10 +75,10 @@ struct Sprite {
 };
 
 
-
 struct Scene;
 struct Entity {
     int id;
+    std::string tag;
     Scene *scene;
     Sprite *sprite;
     Entity *parent;
@@ -87,17 +92,80 @@ struct Entity {
     glm::vec3 scale;
 };
 
+struct GameController {
+
+};
+
+int DEFAULT_MEMORY_ARENA_SIZE_MB = MEGABYTES(1024);
+struct MemoryArena {
+    unsigned char *memory;
+    int memory_size;
+
+    unsigned char *current_memory_pointer;
+};
+
+typedef void (*SceneStartupFunc)(Scene*);
+typedef void (*SceneUpdateFunc)(Scene*, float elapsed_time_s);
+typedef void (*SceneShutdownFunc)(Scene*);
+
 struct Scene {
     int id;
+
+    MemoryArena memory_arena;
 
     GLuint vao;
     Frame frame;
 
+    bool initialized;
+    bool should_end;
+
     std::list <Entity *> entities;
+
+    SceneStartupFunc startup;
+    SceneUpdateFunc update;
+    SceneShutdownFunc shutdown;
+
+    Entity *player;
+
 };
 
 
-struct Controller {
+enum PROJECTILE_TYPE {
+    NONE,
+    LASER,
+    BULLET,
+    MISSILE,
+    ORB
+};
+
+struct Projectile {
+    Entity *entity;
+    
+    Entity *from;
+
+    float Projectile_velocity;
+    float Projectile_damage;
+    PROJECTILE_TYPE projectile_type;
+};
+
+struct Player {
+    Entity *entity;
+
+    std::list<Entity *> options;
+
+    float health;
+    float experience;
+
+    float primary_fire_interval;
+    float secondary_fire_interval;
+
+    float velocity_per_second;
+
+    PROJECTILE_TYPE projectile_type;
+};
+
+
+struct GamePadController {
     bool btn_up;
     bool btn_down;
     bool btn_left;
