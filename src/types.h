@@ -91,6 +91,8 @@ struct Scene;
 struct Entity {
     int id;
     std::string tag;
+    std::string group_tag;
+    std::string name;
     Scene *scene;
     Sprite *sprite;
     Entity *parent;
@@ -102,6 +104,8 @@ struct Entity {
     glm::vec3 position;
     glm::vec3 rotation;
     glm::vec3 scale;
+
+    bool should_free;
 };
 
 struct GameController {
@@ -133,6 +137,7 @@ struct Scene {
 
     std::list <Entity *> *entities;
     std::map <std::string, Entity *> *tagged_entities;
+    std::map <std::string, std::list<Entity *>> *tagged_groups;
 
     SceneStartupFunc startup;
     SceneUpdateFunc update;

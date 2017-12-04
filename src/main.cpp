@@ -60,6 +60,9 @@ void init_sprite(Sprite *sprite, Entity *parent, Texture *texture, glm::vec2 off
 void add_entity(Entity *entity, Entity *child);
 void add_scene_entity(Scene *scene, Entity *child);
 
+void set_entity_group_tag(Scene *scene, Entity *entity, std::string tag);
+std::list<Entity *> get_entities_by_group_tag(Scene *scene, std::string group_tag);
+
 void set_entity_tag(Scene *scene, Entity *entity, std::string tag);
 Entity *get_entity_by_tag(Scene *scene, std::string tag);
 
@@ -99,6 +102,9 @@ int main(int argc, char * argv[])
 
     Texture *option_texture = MALLOC(Texture);
     init_texture(option_texture, "blue_option", "media\\images\\PNG\\ufoBlue.png");
+
+    Texture *bullet_texture = MALLOC(Texture);
+    init_texture(bullet_texture, "blue_bullet", "media\\images\\PNG\\lasers\\laserBlue03.png");
 
     Scene *scene = MALLOC(Scene);
     init_scene(scene, "main_scene");
@@ -166,8 +172,12 @@ int main(int argc, char * argv[])
                             scene->gamepadcontroller.btn_right = true;
                             break;
                         }
+                        case SDLK_a:
+                        {
+                            scene->gamepadcontroller.btn_a = true;
+                            break;
+                        }
                     }
-
                     break;
                 }
                 case SDL_KEYUP:
@@ -193,8 +203,13 @@ int main(int argc, char * argv[])
                             scene->gamepadcontroller.btn_right = false;
                             break;
                         }
-                        break;
+                        case SDLK_a:
+                        {
+                            scene->gamepadcontroller.btn_a = false;
+                            break;
+                        }
                     }
+                    break;
                 }
             }
         }
@@ -271,6 +286,7 @@ void init_scene(Scene *scene, std::string name)
     scene->id = ++scene_ids;
     scene->entities = new std::list<Entity *>();
     scene->tagged_entities = new std::map<std::string, Entity *>();
+    scene->tagged_groups = new std::map <std::string, std::list<Entity *>>();
 
     scene->memory_arena.memory_size = DEFAULT_MEMORY_ARENA_SIZE_MB;
     scene->memory_arena.memory = (unsigned char *)malloc(scene->memory_arena.memory_size*sizeof(unsigned char));
@@ -555,9 +571,13 @@ void create_window(Window *win, std::string &title, int width, int height)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glEnable(GL_DEPTH);
+    glDepthFunc(GL_LEQUAL);
 
     glewExperimental = GL_TRUE;
     glewInit();
@@ -708,6 +728,43 @@ void add_scene_entity(Scene *scene, Entity *entity)
 }
 
 
+void set_entity_group_tag(Scene *scene, Entity *entity, std::string group_tag)
+{
+    if (entity == nullptr) { 
+        std::cout << "cannot set entity property when its null" << std::endl;
+        exit(1);
+    }
+
+    if (scene == nullptr) {
+        std::cout << "cannot set parent to null scene" << std::endl;
+        exit(1);
+    }
+
+    if (scene->tagged_groups->find(group_tag) == scene->tagged_groups->end()) {
+        scene->tagged_groups->insert(std::pair<std::string, std::list<Entity *>>(group_tag, std::list<Entity *>()));
+    }
+    scene->tagged_groups->at(group_tag).push_back(entity);
+}
+
+
+std::list<Entity *> get_entities_by_group_tag(Scene *scene, std::string group_tag)
+{
+    if (scene == nullptr) {
+        std::cout << "cannot set parent to null scene" << std::endl;
+        exit(1);
+    }
+
+    if (scene->tagged_groups->find(group_tag) == scene->tagged_groups->end()) {
+        return std::list<Entity *>();
+    }
+    else {
+        return scene->tagged_groups->at(group_tag);
+    }
+
+    std::list<Entity *>();
+}
+
+
 void add_entity(Entity *entity, Entity *child)
 {
     if (entity == nullptr) { 
@@ -809,7 +866,12 @@ void draw_scene(Scene *scene)
     glClearColor(0.f, 0.f, 0.5f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    draw_entity(scene->player);
+    for(std::list<Entity *>::iterator iter = scene->entities->begin();
+        iter != scene->entities->end();
+        iter++)
+    {
+        draw_entity(*iter);
+    }
 }
 
 
@@ -831,7 +893,7 @@ void main_scene_starup(Scene *scene)
     scene->player->scale = glm::vec3(image_size.x, image_size.y, 0.f);
     scene->player->rotation = glm::vec3(180.f, 0.f, 0.f);
 
-    Entity *option = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));;
+    Entity *option = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));
     init_entity(option,
                 glm::vec3(80.f, 0.f, -1.f),
                 glm::vec3(30.f, 30.f, 30.f),
@@ -850,7 +912,9 @@ void main_scene_starup(Scene *scene)
 
 void main_scene_update(Scene *scene, float elapsed_time_s) 
 {
-    static float main_shoot_interval_s = 0.5f;
+    static float main_shoot_interval_s = 0.1f;
+    static float shoot_timer = main_shoot_interval_s;
+
     static float angle = 0.f;
     angle += (90.f * elapsed_time_s);
     float option_radius = 80.f;
@@ -876,6 +940,25 @@ void main_scene_update(Scene *scene, float elapsed_time_s)
         scene->player->acceleration.x += 1.f;
     }
 
+    shoot_timer += elapsed_time_s;
+    if (scene->gamepadcontroller.btn_a && shoot_timer >= main_shoot_interval_s) {
+        Entity *bullet = (Entity*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Entity));
+        init_entity(bullet,
+                glm::vec3(scene->player->position.x, scene->player->position.y, -10.f),
+                glm::vec3(10.f, 38.f, 1.f),
+                glm::vec3(0.f, 0.f, 0.f));
+
+        bullet->name = std::string("bullet");
+        set_entity_group_tag(scene, bullet, "bullets");
+        bullet->sprite = (Sprite*)MemoryArenaAlloc(&scene->memory_arena, sizeof(Sprite));
+        init_sprite(bullet->sprite, bullet, TEXTURES["blue_bullet"]);
+
+        bullet->velocity = glm::vec3(0.f, 800.f, 0.f);
+        add_scene_entity(scene, bullet);
+
+        shoot_timer = 0.0f;
+    }
+
     if (glm::length(scene->player->acceleration) > 0.f) {
         scene->player->acceleration = glm::normalize(scene->player->acceleration);
         scene->player->velocity += scene->player->acceleration * (player_velocity_per_second*elapsed_time_s);
@@ -885,6 +968,16 @@ void main_scene_update(Scene *scene, float elapsed_time_s)
     scene->player->position += scene->player->velocity;
 
 
+    std::list<Entity *> bullets = get_entities_by_group_tag(scene, "bullets");
+
+    for(std::list<Entity *>::iterator iter = bullets.begin(); iter != bullets.end(); iter++) {
+        Entity *bullet = (*iter);
+        bullet->position += bullet->velocity * elapsed_time_s;
+
+        if (bullet->position.y < 0 || bullet->position.y > SCREEN_HEIGHT) {
+            bullet->deshould_free = true;
+        }
+    }
 }
 
 
